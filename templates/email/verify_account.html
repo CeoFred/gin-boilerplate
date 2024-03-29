@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: #f2f2f2;
+            color: #242D32;
+        }
+
+        a {
+            color: #fff!important
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .logo {
+            display: block;
+            margin: 0 auto;
+            max-width: 150px;
+        }
+
+        .header {
+            color: #7B61FF;
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 20px;
+            margin-bottom: 30px;
+        }
+
+        .message {
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+          .otp-container {
+            display: flex;
+            justify-content: start;
+            align-items: center;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .otp {
+            font-size: 18px;
+            font-weight: bold;
+            background-color: #7B61FF;
+            text-align: center;
+            color: #ffffff;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+
+        .footer {
+            font-size: 14px;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+   
+        <h1 class="header">Welcome to API!</h1>
+        <p class="message">Thank you for signing up with us. To complete your registration, please use the button below to veriffy your account:</p>
+        <div class="otp-container">
+            <p class="otp">
+                <a href={{.Url}}>Verify Account</a>
+            </p>
+        </div>
+        <p class="message">If you did not sign up for an account, please ignore this email.</p>
+        <p class="footer">If you have any questions or need assistance, feel free to reach out to our support team.</p>
+        <p class="footer">Best regards,<br>API Team</p>
+    </div>
+</body>
+</html>

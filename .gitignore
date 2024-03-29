@@ -1,0 +1,5 @@
+.bin/*
+.env.prod
+.env
+*.env
+*.exe

@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+
+  postgres-db:
+    container_name: postgres-db
+    image: postgres:16-bookworm
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    restart: on-failure
+    env_file: .env
+    ports:
+      - '${POSTGRES_PORT}:${POSTGRES_PORT}'
+    volumes:
+      - postgresql:/data/postgresql
+      - ./files/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      - ./files/postgresql.conf:/etc/postgresql/postgresql.conf
+    networks:
+      - APPNet
+  
+  # swagger-docs:
+  #   image: swaggerapi/swagger-ui
+  #   container_name: swagger-docs
+  #   restart: on-failure
+  #   volumes:
+  #     - ./docs/swagger.json:/docs/swagger.json
+  #   environment:
+  #     SWAGGER_JSON: /docs/swagger.json
+  #   ports:
+  #     - "6098:8080"
+  #   networks:
+  #     - APPNet
+    
+  
+  api:
+    image: cosmtrek/air
+    container_name: api
+    restart: on-failure
+    env_file: 
+      - .env
+    ports:
+      -  '${PORT}:${PORT}'
+    volumes:
+      - '../gin-boilerplate:/gin-boilerplate'
+      - '~/.ssh/id_rsa:/root/.ssh/id_rsa'
+      - '~/.ssh/known_hosts:/root/.ssh/known_hosts'
+      - '~/.gitconfig:/root/.gitconfig'
+    working_dir: '/gin-boilerplate'
+    networks:
+      - APPNet
+
+networks:
+  APPNet:
+    driver: bridge
+
+volumes:
+  postgresql:
