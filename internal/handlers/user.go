@@ -113,7 +113,7 @@ func (u *UserHandler) UpdateUserProfile(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} User
+// @Success 200 {object} models.User
 // @Failure 401 {object} ErrorResponse
 // @Router /user/profile [get]
 func (u *UserHandler) UserProfile(c *gin.Context) {

@@ -17,18 +17,18 @@ services:
     networks:
       - APPNet
   
-  # swagger-docs:
-  #   image: swaggerapi/swagger-ui
-  #   container_name: swagger-docs
-  #   restart: on-failure
-  #   volumes:
-  #     - ./docs/swagger.json:/docs/swagger.json
-  #   environment:
-  #     SWAGGER_JSON: /docs/swagger.json
-  #   ports:
-  #     - "6098:8080"
-  #   networks:
-  #     - APPNet
+  swagger-docs:
+    image: swaggerapi/swagger-ui
+    container_name: swagger-docs
+    restart: on-failure
+    volumes:
+      - ./docs/swagger.json:/docs/swagger.json
+    environment:
+      SWAGGER_JSON: /docs/swagger.json
+    ports:
+      - "6098:8080"
+    networks:
+      - APPNet
     
   
   api:
@@ -44,6 +44,7 @@ services:
       - '~/.ssh/id_rsa:/root/.ssh/id_rsa'
       - '~/.ssh/known_hosts:/root/.ssh/known_hosts'
       - '~/.gitconfig:/root/.gitconfig'
+      - '../gin-boilerplate/docs:/gin-boilerplate/docs'
     working_dir: '/gin-boilerplate'
     networks:
       - APPNet
