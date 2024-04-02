@@ -36,13 +36,15 @@ func init() {
 
 	err := godotenv.Load()
 	if err != nil {
-		
-		log.Fatalf("error loading .env file %s", err)
+		log.Printf("error loading .env file %s", err)
 	}
 
 }
 
 func New() *Config {
+
+	log.Println("app port env =>", getEnv("PORT","3004"))
+	
 	return &Config{
 		DbHost:                 getEnv("POSTGRES_HOST", ""),
 		DbUser:                 getEnv("POSTGRES_USER", ""),
