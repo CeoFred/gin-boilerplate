@@ -25,7 +25,7 @@ type User struct {
 	Password      string      `json:"password,omitempty"`
 	LastLogin     string      `json:"last_login"`
 	IP            string      `json:"ip"`
-	ID        uuid.UUID   `json:"id" validate:"required"`
+	ID            uuid.UUID   `json:"id" validate:"required"`
 	Role          AccountRole `json:"role" validate:"required"`
 	EmailVerified bool        `json:"email_verified" validate:"required"`
 	Country       string      `json:"country"`

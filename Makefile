@@ -1,9 +1,13 @@
 project_name = app
 image_name = app:latest
-postgre_image = postgres_gin_boilerplate:latest
 
+include .env
+export
+
+POSTGRES_IMAGE_NAME = postgres:latest
+POSTGRES_CONTAINER_NAME = postgres-db
 run-local:
-	go fmt ./... && gosec ./... && air app.go
+	go fmt ./... && gosec ./... && air main.go
 
 docs-generate:
 	swag init
@@ -14,41 +18,27 @@ requirements:
 clean-packages:
 	go clean -modcache
 
-up: 
-	make up-silent
-	make shell
-
 build:
 	docker build -t $(image_name) .
+
+stop-postgres:
+	docker stop $(POSTGRES_CONTAINER_NAME)
+	docker rm $(POSTGRES_CONTAINER_NAME)
+
+# Start the PostgreSQL container
+start-postgres:
+	docker run --name $(POSTGRES_CONTAINER_NAME) --env-file .env -d -p 15432:5432 $(POSTGRES_IMAGE_NAME)
+
+start:
+	make start-postgres
+	docker run -d -p 8080:8080 --env-file .env --link $(POSTGRES_CONTAINER_NAME):postgres $(image_name)
 
 build-no-cache:
 	docker build --no-cache -t $(image_name) .
 
-up-silent:
-	make delete-container-if-exist
-	make delete-postgre-if-exist
-	make up-postgre
-	make build
-	docker run --env-file .env.dev -p 3006:3006 --name $(project_name) $(image_name) 
+service-stop:
+	docker compose down
 
-up-silent-prefork:
-	make delete-container-if-exist
-	docker run -d -p 3000:3000 --name $(project_name) $(image_name) ./app -prod
-
-up-postgre:
-	docker run --name $(postgre_image) -e POSTGRES_PASSWORD=postgrepw -e POSTGRES_DB=quizard -d -p 5500:5432 postgres
-
-delete-postgre-if-exist:
-	docker rm --force $(postgre_image)
-
-delete-container-if-exist:
-	docker stop $(project_name) || true && docker rm $(project_name) || true
-
-shell:
-	docker exec -it $(project_name) /bin/sh
-
-stop:
-	docker stop $(project_name)
-
-start:
-	docker start $(project_name)
+service-start:
+	make stop
+	docker compose up

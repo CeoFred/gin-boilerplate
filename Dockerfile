@@ -1,41 +1,32 @@
-# Building the binary of the App
-FROM golang:1.19.2 AS build
+# Use a smaller base image (Alpine) for reduced size
+FROM golang:alpine as builder
 
-# `boilerplate` should be replaced with your project name
-WORKDIR /go/src/app
-
-# Copy all the Code and stuff to compile everything
-COPY . .
-
-# Downloads all the dependencies in advance (could be left out, but it's more clear this way)
-RUN go mod download
-
-# Builds the application as a staticly linked one, to allow it to run on alpine
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags timetzdata -a -installsuffix cgo -o app .
-
-# Moving the binary to the 'final Image' to make it smaller
-FROM alpine:latest as release
-
+# Set the Current Working Directory inside the container
 WORKDIR /app
 
-# Create the `public` dir and copy all the assets into it
-RUN mkdir ./static
-COPY ./static ./static
+# Copy go mod and sum files
+COPY go.mod go.sum ./
 
-RUN mkdir ./templates
-COPY ./templates ./templates
+# Download all dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
+RUN go mod download
 
-# `boilerplate` should be replaced here as well
-COPY --from=build /go/src/app/app .
+# Copy the source code from the current directory to the Working Directory inside the container
+COPY . .
 
-# Add packages
-RUN apk -U upgrade \
-    && apk add --no-cache dumb-init ca-certificates \
-    && chmod a+x /app/app
+# Build the Go app with static linking for reduced dependencies
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
 
-# Exposes port 3000 because our program listens on that port
+# Start a new stage for the final minimal image
+FROM alpine:latest
+
+# Set the Current Working Directory inside the container
+WORKDIR /app
+
+# Copy the Pre-built binary file from the previous stage
+COPY --from=builder /app/app .
+
+# Expose port 3006 to the outside world
 EXPOSE 3006
 
-ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-
-CMD ["/app/app"]
+# Command to run the executable
+CMD ["./app"]
