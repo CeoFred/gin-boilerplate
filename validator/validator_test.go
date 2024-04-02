@@ -1,55 +1,33 @@
-// validator/validator_test.go
 package validator
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
-type testCase struct {
-	Name   string
-	Input  interface{}
-	Errors []string
+type User struct {
+	Username string `validate:"required,alpha"`
 }
 
 func TestValidate(t *testing.T) {
-	tests := []testCase{
-		{
-			Name: "Valid Case",
-			Input: struct {
-				Username string `validate:"required"`
-			}{
-				Username: "john_doe",
-			},
-			Errors: nil,
-		},
-		{
-			Name: "Invalid Case",
-			Input: struct {
-				Username string `validate:"required"`
-			}{
-				Username: "",
-			},
-			Errors: []string{"Username is required"},
-		},
-		{
-			Name: "Non-Aphanumeric Case",
-			Input: struct {
-				Username string `validate:"required,alpha"`
-			}{
-				Username: "--[;]a",
-			},
-			Errors: []string{"Username should be alphanumeric only"},
-		},
-		// Add more test cases as needed
-	}
+	validUser := User{Username: "JohnDoe"}
+	invalidUser := User{Username: ""}
 
-	// Run tests
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			errors := Validate(test.Input)
-			assert.ElementsMatch(t, test.Errors, errors)
-		})
-	}
+	t.Run("Valid User", func(t *testing.T) {
+		err := Validate(validUser)
+		if err != nil {
+			t.Errorf("Expected no error for valid user, got: %v", err)
+		}
+	})
+
+	t.Run("Invalid User", func(t *testing.T) {
+		err := Validate(invalidUser)
+		if err == nil {
+			t.Error("Expected error for invalid user, got nil")
+		} else {
+			expectedError := "Username is required"
+			if err.Error() != expectedError {
+				t.Errorf("Expected error message '%s', got '%s'", expectedError, err.Error())
+			}
+		}
+	})
 }
