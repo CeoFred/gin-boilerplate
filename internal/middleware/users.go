@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
@@ -35,22 +37,25 @@ func OnlyAdmin(db *gorm.DB, u *repository.UserRepository) gin.HandlerFunc {
 		claims, _ := c.Get("claims")
 		claimsData, ok := claims.(*helpers.AuthTokenJwtClaim)
 		if !ok {
-			c.JSON(500, NewError("Internal Server Error"))
+			helpers.ReturnJSON(c, "Something went wrong", nil, http.StatusUnauthorized)
 			c.Abort()
+
 			return
 		}
 
-		user, _, err := u.FindByCondition("user_id", claimsData.UserId)
+		user, _, err := u.FindByCondition("id", claimsData.UserId)
 		if err != nil {
-			helpers.Dispatch500Error(c, err)
+			helpers.ReturnError(c, "Something went wrong", err, http.StatusUnauthorized)
 			c.Abort()
 			return
 		}
 		if user.Role != models.AdminRole {
-			c.JSON(500, NewError("Unauthorized access"))
+			helpers.ReturnJSON(c, "Unauthorized access to resource", nil, http.StatusUnauthorized)
 			c.Abort()
 			return
 		}
+
+		c.Set("role", user.Role)
 		c.Next()
 	}
 }
@@ -59,8 +64,15 @@ func JWTMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get the JWT token from the Authorization header
 		authHeader := c.GetHeader("Authorization")
+
+		apiQuery := c.Query("access_token")
+
+		if apiQuery != "" {
+			authHeader = apiQuery
+		}
+
 		if authHeader == "" {
-			c.JSON(401, NewError("Unauthorized"))
+			helpers.ReturnJSON(c, "Missing Authorization Header or Access Token", nil, http.StatusUnauthorized)
 			c.Abort()
 			return
 		}
@@ -68,8 +80,9 @@ func JWTMiddleware(db *gorm.DB) gin.HandlerFunc {
 		// Extract the token from the "Bearer <jwt>" format
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == "" {
-			c.JSON(401, NewError("Unauthorized"))
+			helpers.ReturnJSON(c, "Invalid Authorization Header or Access Token", nil, http.StatusUnauthorized)
 			c.Abort()
+
 			return
 		}
 
@@ -79,16 +92,18 @@ func JWTMiddleware(db *gorm.DB) gin.HandlerFunc {
 			return []byte(constant.JWTSecretKey), nil
 		})
 		if err != nil || !token.Valid {
-			c.JSON(403, NewError("Unauthorized"))
+			helpers.ReturnError(c, "Expired Authorization or Access Token", err, http.StatusUnauthorized)
 			c.Abort()
+
 			return
 		}
 
 		// Extract the claims from the token
 		claims, ok := token.Claims.(*helpers.AuthTokenJwtClaim)
 		if !ok {
-			c.JSON(403, NewError("Unauthorized"))
+			helpers.ReturnJSON(c, "Invalid claims", nil, http.StatusUnauthorized)
 			c.Abort()
+
 			return
 		}
 
@@ -98,14 +113,16 @@ func JWTMiddleware(db *gorm.DB) gin.HandlerFunc {
 		_, found, err := repository.NewUserRepository(db).FindByCondition("email", claims.Email)
 
 		if err != nil {
-			c.JSON(401, NewError("Unauthorized"))
+			helpers.ReturnError(c, "Something went wrong", err, http.StatusUnauthorized)
 			c.Abort()
+
 			return
 		}
 
 		if !found {
-			c.JSON(401, NewError("Unauthorized"))
+			helpers.ReturnJSON(c, "Unauthorized access to resource", nil, http.StatusUnauthorized)
 			c.Abort()
+
 			return
 		}
 

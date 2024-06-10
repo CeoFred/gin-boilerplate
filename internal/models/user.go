@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/gofrs/uuid"
@@ -35,4 +36,15 @@ type User struct {
 	Status        string      `json:"status"`
 	CreatedAt     time.Time   `json:"created_at"`
 	UpdatedAt     time.Time   `json:"updated_at"`
+}
+
+func (u *User) MarshalJSON() ([]byte, error) {
+	type Alias User
+	return json.Marshal(&struct {
+		Password string `json:"password,omitempty"`
+		*Alias
+	}{
+		Password: "",
+		Alias:    (*Alias)(u),
+	})
 }

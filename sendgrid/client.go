@@ -30,25 +30,17 @@ type Content struct {
 }
 
 type Client struct {
-	apiKey  string
-	From    string
-	Subject string
-	Content string
-	Name    string
+	apiKey string
 }
 
-func NewClient(apiKey, from, fromName, subject, content string) *Client {
+func NewClient(apiKey string) *Client {
 
 	return &Client{
-		apiKey:  apiKey,
-		From:    from,
-		Subject: subject,
-		Content: content,
-		Name:    fromName,
+		apiKey: apiKey,
 	}
 }
 
-func (c *Client) Send(person *EmailAddress) error {
+func (c *Client) Send(person *EmailAddress, from, fromName, subject, content string) error {
 
 	body := &Email{
 		Personalizations: []Personalization{
@@ -59,17 +51,17 @@ func (c *Client) Send(person *EmailAddress) error {
 						Name:  person.Name,
 					},
 				},
-				Subject: c.Subject,
+				Subject: subject,
 			},
 		},
 		From: EmailAddress{
-			Email: c.From,
-			Name:  c.Name,
+			Email: from,
+			Name:  fromName,
 		},
 		Content: []Content{
 			{
 				Type:  "text/html",
-				Value: c.Content,
+				Value: content,
 			},
 		},
 	}

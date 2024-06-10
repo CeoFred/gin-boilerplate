@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"fmt"
-	"log"
+
 	"net/http"
 	"strings"
 	"time"
@@ -11,8 +11,7 @@ import (
 	"github.com/CeoFred/gin-boilerplate/internal/helpers"
 	"github.com/CeoFred/gin-boilerplate/internal/models"
 	"github.com/CeoFred/gin-boilerplate/internal/otp"
-	"github.com/CeoFred/gin-boilerplate/internal/repository"
-	"github.com/CeoFred/gin-boilerplate/sendgrid"
+	"github.com/CeoFred/gin-boilerplate/internal/service"
 	"github.com/gofrs/uuid"
 
 	"github.com/gin-gonic/gin"
@@ -21,15 +20,17 @@ import (
 )
 
 type AuthHandler struct {
-	userRepository *repository.UserRepository
+	userRepository helpers.UserRepositoryInterface
+	emailService   service.EmailServicer
 }
 
 func NewAuthHandler(
-	userRepo *repository.UserRepository,
-
+	userRepo helpers.UserRepositoryInterface,
+	emailService service.EmailServicer,
 ) *AuthHandler {
 	return &AuthHandler{
 		userRepository: userRepo,
+		emailService:   emailService,
 	}
 }
 
@@ -124,29 +125,29 @@ func (a *AuthHandler) Authenticate(c *gin.Context) {
 	validatedReqBody, exists := c.Get("validatedRequestBody")
 
 	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve validated request body"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.INVALID_REQUEST_BODY), http.StatusBadRequest)
 		return
 	}
 
 	input, ok := validatedReqBody.(AuthenticateUser)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert request body to AuthenticateUser"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.REQUEST_BODY_PARSE_ERROR), http.StatusBadRequest)
 		return
 	}
 
 	user, userExist, err := a.userRepository.FindByCondition("email = ?", strings.ToLower(input.Email))
 	if err != nil {
-		helpers.Dispatch500Error(c, err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	if !userExist {
-		helpers.Dispatch400Error(c, "invalid account credentials", nil)
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("invalid account credentials"), http.StatusBadRequest)
 		return
 	}
 
 	if !user.EmailVerified {
-		helpers.Dispatch400Error(c, "account not verified", nil)
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("account not verified"), http.StatusBadRequest)
 		return
 	}
 
@@ -155,38 +156,35 @@ func (a *AuthHandler) Authenticate(c *gin.Context) {
 	err = bcrypt.CompareHashAndPassword(hashedPassword, plainPassword)
 
 	if err != nil {
-		helpers.Dispatch400Error(c, "email and password does not match", nil)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	timeNow, err := helpers.TimeNow("Africa/Lagos")
 	if err != nil {
-		helpers.Dispatch400Error(c, err.Error(), err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	user.LastLogin = timeNow
 	user.IP = c.ClientIP()
 
-	_, err = a.userRepository.UpdateUserByCondition("email", user.Email, user)
+	_, err = a.userRepository.Save(user)
 	if err != nil {
-		helpers.Dispatch400Error(c, err.Error(), err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	jwtToken, err := helpers.GenerateToken(constant.JWTSecretKey, user.Email, user.FirstName, (user.ID).String())
 	if err != nil {
-		helpers.Dispatch500Error(c, err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "authenticated successfully",
-		"data": map[string]string{
-			"jwt": jwtToken,
-		},
-	})
+	helpers.ReturnJSON(c, "Authenticated successfully", map[string]interface{}{
+		"access_token": jwtToken,
+		"expires_in":   time.Now().Local().Add(time.Hour * 24 * 20),
+	}, http.StatusOK)
 }
 
 func (a *AuthHandler) findUserOrError(email string) (user *models.User, err error) {
@@ -218,35 +216,36 @@ func (a *AuthHandler) Register(c *gin.Context) {
 	validatedReqBody, exists := c.Get("validatedRequestBody")
 
 	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve validated request body"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.INVALID_REQUEST_BODY), http.StatusBadRequest)
 		return
 	}
 
 	input, ok := validatedReqBody.(InputCreateUser)
-
 	if !ok {
-
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert request body to InputCreateUser"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.REQUEST_BODY_PARSE_ERROR), http.StatusBadRequest)
 		return
 	}
 
-	_, err := a.findUserOrError(input.Email)
+	_, found, err := a.userRepository.FindByCondition("email", input.Email)
+	if err != nil {
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
+		return
+	}
 
-	if err == nil {
-		fmt.Println(err)
-		helpers.Dispatch400Error(c, "user already registered", nil)
+	if found {
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("account already exists"), http.StatusConflict)
 		return
 	}
 
 	hash, err := helpers.HashPassword(input.Password)
 	if err != nil {
-		helpers.Dispatch400Error(c, "error hashing password", err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	ID, err := uuid.NewV7()
 	if err != nil {
-		helpers.Dispatch400Error(c, "error generating uuid", err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 	// create record
@@ -263,71 +262,17 @@ func (a *AuthHandler) Register(c *gin.Context) {
 		LastName:      input.LastName,
 	}
 
-	if err := a.userRepository.CreateUser(user); err != nil {
-		helpers.Dispatch500Error(c, err)
+	if err := a.userRepository.Create(user); err != nil {
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
-	scheme := "http" // Default scheme
-	isLocal := gin.Mode() == gin.DebugMode
+	baseURL := helpers.GetBaseURL(c)
 
-	if isLocal {
-		// Running in local development mode
-		scheme = "http"
-	} else {
-		// Running in production or other mode
-		scheme = "https"
-	}
+	go a.emailService.SendVerificationEmail(user.FirstName, user.Email, baseURL)
 
-	// Get the host (domain) from the request
-	host := c.Request.Host
+	helpers.ReturnJSON(c, "Account created successfully", user, http.StatusCreated)
 
-	// Construct the base URL by combining the scheme and host
-	baseURL := fmt.Sprintf("%s://%s", scheme, host)
-
-	c.JSON(http.StatusCreated, gin.H{
-		"success": true,
-		"message": "registeristration successful",
-		"data": map[string]interface{}{
-			"id":             fmt.Sprint(user.ID),
-			"email":          user.Email,
-			"email_verified": user.EmailVerified,
-		},
-	})
-
-	go sendVerificationEmail(user.FirstName, user.Email, baseURL)
-
-}
-
-func sendVerificationEmail(name, email, url string) {
-	to := sendgrid.EmailAddress{
-		Name:  name,
-		Email: email,
-	}
-
-	otpToken, err := otp.OTPManage.GenerateOTP(email, time.Minute*10)
-	type OTP struct {
-		Otp  string
-		Name string
-		Url  string
-	}
-	if err != nil {
-		log.Printf("Error sending email: %v", err.Error())
-	}
-
-	verificationUrl := fmt.Sprintf("%s/api/v1/auth/verify/%s/%s", url, email, otpToken)
-
-	messageBody, err := helpers.ParseTemplateFile("verify_account.html", OTP{Otp: otpToken, Name: name, Url: verificationUrl})
-
-	if err != nil {
-		log.Printf("Error sending email: %v", err.Error())
-	}
-	client := sendgrid.NewClient(constant.SendGridApiKey, "hello@bonpay.finance", "Bonpay Finance", "Verify your email", messageBody)
-	err = client.Send(&to)
-
-	if err != nil {
-		log.Printf("Error sending email: %v", err.Error())
-	}
 }
 
 // VerifyEmail is a route handler that verifies the user's email address.
@@ -383,7 +328,7 @@ func (a *AuthHandler) VerifyEmail(c *gin.Context) {
 	user.Status = string(models.ActiveAccount)
 	user.UpdatedAt = time.Now()
 
-	_, err = a.userRepository.UpdateUserByCondition("email", user.Email, user)
+	_, err = a.userRepository.Save(user)
 
 	if err != nil {
 		c.Redirect(http.StatusFound, fmt.Sprintf("%s/auth?error=500", clientUrl))
@@ -391,36 +336,6 @@ func (a *AuthHandler) VerifyEmail(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusFound, fmt.Sprintf("%s/signin?token=%s", clientUrl, jwtToken))
-}
-
-func sendPasswordResetEmail(name, email string) {
-	to := sendgrid.EmailAddress{
-		Name:  name,
-		Email: email,
-	}
-
-	otpToken, err := otp.OTPManage.GenerateOTP(email, time.Minute*10)
-	if err != nil {
-		log.Printf("Error generating otp: %v", err.Error())
-	}
-
-	type OTP struct {
-		Otp  string
-		Name string
-		Url  string
-	}
-
-	messageBody, err := helpers.ParseTemplateFile("account_reset.html", OTP{Otp: otpToken, Name: name})
-
-	if err != nil {
-		log.Printf("Error sending email: %v", err.Error())
-	}
-	client := sendgrid.NewClient(constant.SendGridApiKey, "hello@bonpay.finance", "Bonpay Finance", "Reset your password", messageBody)
-	err = client.Send(&to)
-
-	if err != nil {
-		log.Printf("Error sending email: %v", err.Error())
-	}
 }
 
 // ForgotPassword is a route handler that sends the reset otp to the user's email address.
@@ -442,22 +357,20 @@ func (a *AuthHandler) ForgotPassword(c *gin.Context) {
 	validatedReqBody, exists := c.Get("validatedRequestBody")
 
 	if !exists {
-		helpers.Dispatch400Error(c, "Failed to retrieve validated request body", "")
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.INVALID_REQUEST_BODY), http.StatusBadRequest)
 		return
 	}
 
 	input, ok := validatedReqBody.(ForgotPasswordInput)
-
 	if !ok {
-
-		helpers.Dispatch400Error(c, "Failed to retrieve validated request body", "")
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.REQUEST_BODY_PARSE_ERROR), http.StatusBadRequest)
 		return
 	}
 
 	userFound, err := a.findUserOrError(input.Email)
 
 	if userFound == nil && err != nil {
-		helpers.Dispatch200OK(c, "success", "success")
+		helpers.ReturnJSON(c, "Action successful", nil, http.StatusOK)
 		return
 	}
 
@@ -468,9 +381,9 @@ func (a *AuthHandler) ForgotPassword(c *gin.Context) {
 		fullName = strings.Split(fullName, " ")[1]
 	}
 
-	go sendPasswordResetEmail(fullName, email)
+	go a.emailService.SendForgotPasswordEmail(fullName, email)
 
-	helpers.Dispatch200OK(c, "success", "success")
+	helpers.ReturnJSON(c, "Action successful", nil, http.StatusOK)
 }
 
 // VerifyResetOTP is a route handler that verifies the user's email address.
@@ -492,44 +405,45 @@ func (a *AuthHandler) VerifyResetOTP(c *gin.Context) {
 	validatedReqBody, exists := c.Get("validatedRequestBody")
 
 	if !exists {
-		helpers.Dispatch400Error(c, "Failed to retrieve validated request body", "")
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.INVALID_REQUEST_BODY), http.StatusBadRequest)
 		return
 	}
 
 	input, ok := validatedReqBody.(OtpVerifyInput)
-
 	if !ok {
-		helpers.Dispatch400Error(c, "Failed to retrieve validated request body", "")
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.REQUEST_BODY_PARSE_ERROR), http.StatusBadRequest)
 		return
 	}
 
-	user, userExist, err := a.userRepository.FindUserByCondition("email", input.Email)
+	user, userExist, err := a.userRepository.FindByCondition("email", input.Email)
 
 	if err != nil {
-		helpers.Dispatch400Error(c, "Error getting user", err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	if !userExist {
-		helpers.Dispatch404Error(c, "User not found", "")
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("user account does not exist"), http.StatusBadRequest)
 		return
 	}
 
 	valid := otp.OTPManage.VerifyOTP(input.Email, input.Token)
 
 	if !valid {
-		c.JSON(http.StatusFound, gin.H{"error": "Invalid OTP"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("invalid opt"), http.StatusBadRequest)
 		return
 	}
 
 	jwtToken, err := helpers.GenerateToken(constant.JWTSecretKey, user.Email, user.FirstName, user.ID.String())
 
 	if err != nil {
-		helpers.Dispatch400Error(c, "Error generating token", err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
-	helpers.Dispatch200OK(c, "success", jwtToken)
+	helpers.ReturnJSON(c, "Verified", map[string]interface{}{
+		"access_token": jwtToken,
+	}, http.StatusOK)
 
 }
 
@@ -554,15 +468,13 @@ func (a *AuthHandler) ResetPassword(c *gin.Context) {
 	validatedReqBody, exists := c.Get("validatedRequestBody")
 
 	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve validated request body"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.INVALID_REQUEST_BODY), http.StatusBadRequest)
 		return
 	}
 
 	input, ok := validatedReqBody.(ResetPasswordInput)
-
 	if !ok {
-
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert request body to InputCreateUser"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.REQUEST_BODY_PARSE_ERROR), http.StatusBadRequest)
 		return
 	}
 
@@ -574,19 +486,19 @@ func (a *AuthHandler) ResetPassword(c *gin.Context) {
 	claims := token.Claims.(*helpers.AuthTokenJwtClaim)
 
 	if err != nil {
-		helpers.Dispatch400Error(c, "failed to get claims", nil)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
-	user, _, err := a.userRepository.FindUserByCondition("user_id", claims.UserId)
+	user, _, err := a.userRepository.FindByCondition("user_id", claims.UserId)
 
 	if err != nil {
-		helpers.Dispatch400Error(c, "failed to find user", nil)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	if user == nil {
-		helpers.Dispatch400Error(c, "user not found", nil)
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("user not found"), http.StatusNotFound)
 		return
 	}
 
@@ -603,16 +515,12 @@ func (a *AuthHandler) ResetPassword(c *gin.Context) {
 	user.Status = string(models.ActiveAccount)
 	user.UpdatedAt = time.Now()
 
-	_, err = a.userRepository.UpdateUserByCondition("email", user.Email, user)
+	_, err = a.userRepository.Save(user)
 
 	if err != nil {
-		helpers.Dispatch400Error(c, err.Error(), err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
-	c.SetCookie("access_token", "", -1, "/", "localhost", false, true)
-	c.SetCookie("refresh_token", "", -1, "/", "localhost", false, true)
-	c.SetCookie("logged_in", "", -1, "/", "localhost", false, true)
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Password data updated successfully"})
+	helpers.ReturnJSON(c, "Password updated successfully", user, http.StatusOK)
 }

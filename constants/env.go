@@ -30,6 +30,8 @@ type Config struct {
 	CloudinaryName         string
 	ClientUrl              string
 	APIToolkitKey          string
+	SendFromEmail          string
+	SendFromName           string
 }
 
 func init() {
@@ -43,8 +45,8 @@ func init() {
 
 func New() *Config {
 
-	log.Println("app port env =>", getEnv("PORT","3004"))
-	
+	log.Println("app port env =>", getEnv("PORT", "3004"))
+
 	return &Config{
 		DbHost:                 getEnv("POSTGRES_HOST", ""),
 		DbUser:                 getEnv("POSTGRES_USER", ""),
@@ -65,6 +67,8 @@ func New() *Config {
 		CloudinaryName:         getEnv("CLOUDINARY_NAME", ""),
 		ClientUrl:              getEnv("CLIENT_WEBAPP_URL", ""),
 		APIToolkitKey:          getEnv("API_TOOLKIT_KEY", ""),
+		SendFromEmail:          getEnv("SEND_FROM_EMAIL", ""),
+		SendFromName:           getEnv("SEND_FROM_NAME", ""),
 	}
 }
 

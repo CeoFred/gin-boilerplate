@@ -13,7 +13,6 @@ import (
 
 	"github.com/CeoFred/gin-boilerplate/constants"
 	"github.com/CeoFred/gin-boilerplate/internal/helpers"
-	"github.com/CeoFred/gin-boilerplate/internal/models"
 	"github.com/CeoFred/gin-boilerplate/internal/repository"
 )
 
@@ -65,42 +64,46 @@ type UpdateUserProfileInput struct {
 // @Router /user [put]
 func (u *UserHandler) UpdateUserProfile(c *gin.Context) {
 	var input UpdateUserProfileInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		helpers.Dispatch500Error(c, err)
-		return
-	}
 
-	claimsRaw, exists := c.Get("claims")
+	validatedReqBody, exists := c.Get("validatedRequestBody")
+
 	if !exists {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.INVALID_REQUEST_BODY), http.StatusBadRequest)
 		return
 	}
 
-	claims, ok := claimsRaw.(*helpers.AuthTokenJwtClaim)
+	input, ok := validatedReqBody.(UpdateUserProfileInput)
 	if !ok {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf(helpers.REQUEST_BODY_PARSE_ERROR), http.StatusBadRequest)
+		return
+	}
+
+	claims, err := helpers.GetAuthenticatedUser(c)
+	if err != nil {
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	user, found, err := u.userRepository.FindByCondition("email = ?", claims.Email)
 	if err != nil {
-		helpers.Dispatch400Error(c, "something went wrong", err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
+
 	if !found {
-		helpers.Dispatch400Error(c, "user not found", nil)
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("user not found"), http.StatusNotFound)
 		return
 	}
 
 	user.PhoneNumber = input.PhoneNumber
 
-	_, err = u.userRepository.UpdateUserByCondition("email", user.Email, user)
+	_, err = u.userRepository.Save(user)
 	if err != nil {
-		helpers.Dispatch400Error(c, "something went wrong", err)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
-	helpers.Dispatch200OK(c, "OK", nil)
+	helpers.ReturnJSON(c, "Profile updated successfully", user, http.StatusOK)
 }
 
 // UserProfile is a route handler that retrieves the user profile of the authenticated user.
@@ -124,32 +127,25 @@ func (u *UserHandler) UserProfile(c *gin.Context) {
 		return
 	}
 
-	user, ok := claimsRaw.(*helpers.AuthTokenJwtClaim)
+	authClaims, ok := claimsRaw.(*helpers.AuthTokenJwtClaim)
 	if !ok {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	usr, f, err := u.userRepository.FindByCondition("user_id = ?", user.UserId)
+	user, f, err := u.userRepository.FindByCondition("user_id = ?", authClaims.UserId)
 
 	if err != nil {
-		helpers.Dispatch400Error(c, "failed to fetch wallet", nil)
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	if !f {
-		helpers.Dispatch400Error(c, "failed to fetch user", err)
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("account not found"), http.StatusNotFound)
 		return
 	}
 
-	helpers.Dispatch200OK(c, "success", models.User{
-		CreatedAt:     usr.CreatedAt,
-		Email:         usr.Email,
-		Status:        usr.Status,
-		EmailVerified: usr.EmailVerified,
-		LastLogin:     usr.LastLogin,
-		Role:          usr.Role,
-	})
+	helpers.ReturnJSON(c, "Profile retrieved", user, http.StatusOK)
 
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/CeoFred/gin-boilerplate/constants"
 	"github.com/CeoFred/gin-boilerplate/database"
+	"github.com/CeoFred/gin-boilerplate/internal/helpers"
 	"github.com/CeoFred/gin-boilerplate/internal/otp"
 	"github.com/CeoFred/gin-boilerplate/internal/routes"
 
@@ -88,7 +89,7 @@ func main() {
 	}))
 
 	g.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:*"},
+		AllowOrigins:     []string{"http://localhost:*"}, // add more origins
 		AllowMethods:     []string{"PUT", "PATCH", "GET", "POST", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -123,9 +124,7 @@ func main() {
 	routes.Routes(v1, database.DB)
 
 	g.NoRoute(func(c *gin.Context) {
-		c.JSON(404, gin.H{
-			"message": "Whooosp! Not Found",
-		})
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("Route not found"), http.StatusNotFound)
 	})
 
 	port := os.Getenv("PORT")

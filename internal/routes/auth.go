@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/CeoFred/gin-boilerplate/internal/handlers"
 	"github.com/CeoFred/gin-boilerplate/internal/repository"
+	"github.com/CeoFred/gin-boilerplate/internal/service"
 	"github.com/CeoFred/gin-boilerplate/internal/validators"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -10,8 +11,9 @@ import (
 
 func RegisterAuthRoutes(router *gin.RouterGroup, db *gorm.DB) {
 	userRepo := repository.NewUserRepository(db)
+	emailService := service.NewEmailService()
 
-	handler := handlers.NewAuthHandler(userRepo)
+	handler := handlers.NewAuthHandler(userRepo, emailService)
 
 	authRouter := router.Group("/auth")
 

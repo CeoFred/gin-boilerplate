@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/CeoFred/gin-boilerplate/internal/models"
+	"github.com/gofrs/uuid"
 	"gorm.io/gorm"
 )
 
@@ -18,7 +19,29 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	}
 }
 
-func (a *UserRepository) FindRecordsByCondition(condition, value string) ([]*models.User, error) {
+func (a *UserRepository) Find(id uuid.UUID) (*models.User, error) {
+	var user *models.User
+	err := a.database.First(&user, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (a *UserRepository) Exists(id uuid.UUID) (bool, error) {
+	var user *models.User
+	err := a.database.First(&user, "id = ?", id).Error
+	if err != nil {
+		return false, err
+	}
+
+	if user == nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (a *UserRepository) Where(condition, value string) ([]*models.User, error) {
 	var users []*models.User
 	err := a.database.Raw(fmt.Sprintf(`SELECT * FROM users WHERE %s = ?`, condition), value).Scan(&users).Error
 	if err != nil {
@@ -42,18 +65,6 @@ func (a *UserRepository) FindByCondition(condition, value string) (*models.User,
 	return nil, false, nil
 }
 
-func (a *UserRepository) FindUserByCondition(condition, value string) (*models.User, bool, error) {
-	var user *models.User
-	err := a.database.Raw(fmt.Sprintf(`SELECT * FROM users WHERE %s = ?`, condition), value).Scan(&user).Error
-	if err != nil {
-		return nil, false, err
-	}
-	if user != nil {
-		return user, true, nil
-	}
-	return nil, false, nil
-}
-
 func (a *UserRepository) FindByAccountType(value string) ([]*models.User, bool, error) {
 	var user []*models.User
 	err := a.database.Raw(`SELECT * FROM users WHERE account_type = ?`, value).Scan(&user).Error
@@ -66,15 +77,44 @@ func (a *UserRepository) FindByAccountType(value string) ([]*models.User, bool, 
 	return nil, false, nil
 }
 
-func (a *UserRepository) CreateUser(user *models.User) error {
-	return a.database.Model(&models.User{}).Create(user).Error
+func (a *UserRepository) Create(user *models.User) error {
+	return a.database.Model(&user).Create(user).Error
 }
 
-func (a *UserRepository) UpdateUserByCondition(condition, value string, update *models.User) (*models.User, error) {
-	user := &models.User{}
-	rows := a.database.Model(user).Where(fmt.Sprintf(`%s = ?`, condition), value).Updates(&update).First(user)
-	if rows.RowsAffected == 0 {
+func (a *UserRepository) Save(user *models.User) (*models.User, error) {
+
+	txn := a.database.Model(user).Where("id = ?", user.ID).Updates(&user).First(user)
+
+	if txn.RowsAffected == 0 {
 		return nil, errors.New("no record updated")
 	}
+
+	if txn.Error != nil {
+		return nil, txn.Error
+	}
+
 	return user, nil
+}
+
+func (a *UserRepository) RawCount(q string, count *int64) error {
+	return a.database.Model(&models.User{}).Raw(q).Count(count).Error
+}
+
+func (a *UserRepository) QueryWithArgs(q string, args ...interface{}) ([]*models.User, error) {
+	var n []*models.User
+	err := a.database.Raw(q, args...).Find(&n).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if n != nil {
+		return n, nil
+	}
+
+	return nil, nil
+}
+
+func (a *UserRepository) RawSmartSelect(q string, res interface{}, args ...interface{}) error {
+	return a.database.Model(&models.User{}).Raw(q, args...).Find(res).Error
 }
