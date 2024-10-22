@@ -79,7 +79,7 @@ make service-start
 
 Swagger documentation is available at:
 ```
-http://localhost:2024/swagger/index.html
+http://localhost:8080/swagger/index.html
 ```
 
 To regenerate Swagger documentation:
