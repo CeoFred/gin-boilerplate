@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 )
 
@@ -15,6 +16,7 @@ type Config struct {
 	Password string
 	User     string
 	DBName   string
+	SSLMode  string
 }
 
 func Connect(config *Config) {
@@ -22,8 +24,8 @@ func Connect(config *Config) {
 		err     error
 		port, _ = strconv.ParseUint(config.Port, 10, 32)
 		dsn     = fmt.Sprintf(
-			"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-			config.Host, port, config.User, config.Password, config.DBName,
+			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			config.Host, port, config.User, config.Password, config.DBName, config.SSLMode,
 		)
 	)
 
@@ -34,14 +36,14 @@ func Connect(config *Config) {
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 
+	DB.Logger.LogMode(logger.Silent)
+
 	if err != nil {
 		fmt.Println(
 			err.Error(),
 		)
 		panic("failed to connect database")
 	}
-
-	// RunAutoMigrations()
 
 	fmt.Println("Connection Opened to Database")
 }

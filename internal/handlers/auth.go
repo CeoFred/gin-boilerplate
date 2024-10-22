@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/CeoFred/gin-boilerplate/constants"
+	bootstrap "github.com/CeoFred/gin-boilerplate/internal/bootstrap"
 	"github.com/CeoFred/gin-boilerplate/internal/helpers"
 	"github.com/CeoFred/gin-boilerplate/internal/models"
 	"github.com/CeoFred/gin-boilerplate/internal/otp"
-	"github.com/CeoFred/gin-boilerplate/internal/service"
 	"github.com/gofrs/uuid"
 
 	"github.com/gin-gonic/gin"
@@ -20,17 +20,14 @@ import (
 )
 
 type AuthHandler struct {
-	userRepository helpers.UserRepositoryInterface
-	emailService   service.EmailServicer
+	deps *bootstrap.AppDependencies
 }
 
 func NewAuthHandler(
-	userRepo helpers.UserRepositoryInterface,
-	emailService service.EmailServicer,
+	deps *bootstrap.AppDependencies,
 ) *AuthHandler {
 	return &AuthHandler{
-		userRepository: userRepo,
-		emailService:   emailService,
+		deps: deps,
 	}
 }
 
@@ -135,7 +132,7 @@ func (a *AuthHandler) Authenticate(c *gin.Context) {
 		return
 	}
 
-	user, userExist, err := a.userRepository.FindByCondition("email = ?", strings.ToLower(input.Email))
+	user, userExist, err := a.deps.UserRepo.FindByCondition("email = ?", strings.ToLower(input.Email))
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
@@ -169,7 +166,7 @@ func (a *AuthHandler) Authenticate(c *gin.Context) {
 	user.LastLogin = timeNow
 	user.IP = c.ClientIP()
 
-	_, err = a.userRepository.Save(user)
+	_, err = a.deps.UserRepo.Save(user)
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
@@ -188,7 +185,7 @@ func (a *AuthHandler) Authenticate(c *gin.Context) {
 }
 
 func (a *AuthHandler) findUserOrError(email string) (user *models.User, err error) {
-	user, userExist, err := a.userRepository.FindByCondition("email = ?", email)
+	user, userExist, err := a.deps.UserRepo.FindByCondition("email = ?", email)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +223,7 @@ func (a *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	_, found, err := a.userRepository.FindByCondition("email", input.Email)
+	_, found, err := a.deps.UserRepo.FindByCondition("email", input.Email)
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
@@ -262,14 +259,14 @@ func (a *AuthHandler) Register(c *gin.Context) {
 		LastName:      input.LastName,
 	}
 
-	if err := a.userRepository.Create(user); err != nil {
+	if err := a.deps.UserRepo.Create(user); err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
 	}
 
 	baseURL := helpers.GetBaseURL(c)
 
-	go a.emailService.SendVerificationEmail(user.FirstName, user.Email, baseURL)
+	go a.deps.EmailService.SendVerificationEmail(user.FirstName, user.Email, baseURL)
 
 	helpers.ReturnJSON(c, "Account created successfully", user, http.StatusCreated)
 
@@ -293,7 +290,7 @@ func (a *AuthHandler) VerifyEmail(c *gin.Context) {
 	email := c.Param("email")
 	token := c.Param("otp")
 
-	user, userExist, err := a.userRepository.FindByCondition("email = ?", email)
+	user, userExist, err := a.deps.UserRepo.FindByCondition("email = ?", email)
 	clientUrl := constant.ClientUrl
 
 	if err != nil {
@@ -328,7 +325,7 @@ func (a *AuthHandler) VerifyEmail(c *gin.Context) {
 	user.Status = string(models.ActiveAccount)
 	user.UpdatedAt = time.Now()
 
-	_, err = a.userRepository.Save(user)
+	_, err = a.deps.UserRepo.Save(user)
 
 	if err != nil {
 		c.Redirect(http.StatusFound, fmt.Sprintf("%s/auth?error=500", clientUrl))
@@ -381,7 +378,7 @@ func (a *AuthHandler) ForgotPassword(c *gin.Context) {
 		fullName = strings.Split(fullName, " ")[1]
 	}
 
-	go a.emailService.SendForgotPasswordEmail(fullName, email)
+	go a.deps.EmailService.SendForgotPasswordEmail(fullName, email)
 
 	helpers.ReturnJSON(c, "Action successful", nil, http.StatusOK)
 }
@@ -415,7 +412,7 @@ func (a *AuthHandler) VerifyResetOTP(c *gin.Context) {
 		return
 	}
 
-	user, userExist, err := a.userRepository.FindByCondition("email", input.Email)
+	user, userExist, err := a.deps.UserRepo.FindByCondition("email", input.Email)
 
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
@@ -490,7 +487,7 @@ func (a *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	user, _, err := a.userRepository.FindByCondition("user_id", claims.UserId)
+	user, _, err := a.deps.UserRepo.FindByCondition("user_id", claims.UserId)
 
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
@@ -509,13 +506,12 @@ func (a *AuthHandler) ResetPassword(c *gin.Context) {
 
 	hashedPassword, _ := helpers.HashPassword(input.Password)
 
-	// Update User in Database
 	user.Password = hashedPassword
 	user.EmailVerified = true
 	user.Status = string(models.ActiveAccount)
 	user.UpdatedAt = time.Now()
 
-	_, err = a.userRepository.Save(user)
+	_, err = a.deps.UserRepo.Save(user)
 
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)

@@ -1,19 +1,16 @@
 package routes
 
 import (
+	deps "github.com/CeoFred/gin-boilerplate/internal/bootstrap"
+
 	"github.com/CeoFred/gin-boilerplate/internal/handlers"
-	"github.com/CeoFred/gin-boilerplate/internal/repository"
-	"github.com/CeoFred/gin-boilerplate/internal/service"
 	"github.com/CeoFred/gin-boilerplate/internal/validators"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
-func RegisterAuthRoutes(router *gin.RouterGroup, db *gorm.DB) {
-	userRepo := repository.NewUserRepository(db)
-	emailService := service.NewEmailService()
+func RegisterAuthRoutes(router *gin.RouterGroup, d *deps.AppDependencies) {
 
-	handler := handlers.NewAuthHandler(userRepo, emailService)
+	handler := handlers.NewAuthHandler(d)
 
 	authRouter := router.Group("/auth")
 

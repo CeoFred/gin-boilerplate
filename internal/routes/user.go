@@ -1,21 +1,19 @@
 package routes
 
 import (
+	deps "github.com/CeoFred/gin-boilerplate/internal/bootstrap"
 	"github.com/CeoFred/gin-boilerplate/internal/handlers"
 	"github.com/CeoFred/gin-boilerplate/internal/middleware"
-	"github.com/CeoFred/gin-boilerplate/internal/repository"
 	"github.com/CeoFred/gin-boilerplate/internal/validators"
 
 	"github.com/gin-gonic/gin"
-
-	"gorm.io/gorm"
 )
 
-func RegisterUserRoutes(router *gin.RouterGroup, db *gorm.DB) {
+func RegisterUserRoutes(router *gin.RouterGroup, d *deps.AppDependencies) {
 	userRouter := router.Group("user")
 
-	handler := handlers.NewUserHandler(repository.NewUserRepository(db))
+	handler := handlers.NewUserHandler(d)
 
-	userRouter.GET("/profile", middleware.JWTMiddleware(db), handler.UserProfile)
-	userRouter.PUT("/", middleware.JWTMiddleware(db), validators.ValidateUpdateUserProfile, handler.UpdateUserProfile)
+	userRouter.GET("/profile", middleware.JWTMiddleware(d.DatabaseService), handler.UserProfile)
+	userRouter.PUT("/", middleware.JWTMiddleware(d.DatabaseService), validators.ValidateUpdateUserProfile, handler.UpdateUserProfile)
 }

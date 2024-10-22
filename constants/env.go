@@ -32,6 +32,7 @@ type Config struct {
 	APIToolkitKey          string
 	SendFromEmail          string
 	SendFromName           string
+	SSLMode                string
 }
 
 func init() {
@@ -69,6 +70,7 @@ func New() *Config {
 		APIToolkitKey:          getEnv("API_TOOLKIT_KEY", ""),
 		SendFromEmail:          getEnv("SEND_FROM_EMAIL", ""),
 		SendFromName:           getEnv("SEND_FROM_NAME", ""),
+		SSLMode:                getEnv("SSL_MODE", "disable"),
 	}
 }
 

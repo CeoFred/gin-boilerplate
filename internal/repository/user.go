@@ -9,11 +9,22 @@ import (
 	"gorm.io/gorm"
 )
 
+type UserRepositoryInterface interface {
+	Create(user *models.User) error
+	Find(id uuid.UUID) (*models.User, error)
+	Exists(id uuid.UUID) (bool, error)
+	Where(condition, value string) ([]*models.User, error)
+	FindByCondition(condition, value string) (*models.User, bool, error)
+	FindByAccountType(value string) ([]*models.User, bool, error)
+	RawSmartSelect(q string, res interface{}, args ...interface{}) error
+	Save(user *models.User) (*models.User, error)
+}
+
 type UserRepository struct {
 	database *gorm.DB
 }
 
-func NewUserRepository(db *gorm.DB) *UserRepository {
+func NewUserRepository(db *gorm.DB) UserRepositoryInterface {
 	return &UserRepository{
 		database: db,
 	}

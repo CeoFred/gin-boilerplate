@@ -2,12 +2,13 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
+
+	"github.com/CeoFred/gin-boilerplate/internal/bootstrap"
 )
 
-func Routes(r *gin.RouterGroup, db *gorm.DB) {
+func Routes(r *gin.RouterGroup, d *bootstrap.AppDependencies) {
 
-	RegisterUserRoutes(r, db)
-	RegisterAuthRoutes(r, db)
+	RegisterUserRoutes(r, d)
+	RegisterAuthRoutes(r, d)
 
 }

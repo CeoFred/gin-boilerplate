@@ -12,20 +12,18 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/CeoFred/gin-boilerplate/constants"
+	bootstrap "github.com/CeoFred/gin-boilerplate/internal/bootstrap"
 	"github.com/CeoFred/gin-boilerplate/internal/helpers"
-	"github.com/CeoFred/gin-boilerplate/internal/repository"
 )
 
-var ()
-
 type UserHandler struct {
-	userRepository *repository.UserRepository
+	deps *bootstrap.AppDependencies
 }
 
-func NewUserHandler(userRepo *repository.UserRepository,
+func NewUserHandler(deps *bootstrap.AppDependencies,
 ) *UserHandler {
 	return &UserHandler{
-		userRepository: userRepo,
+		deps: deps,
 	}
 }
 
@@ -84,7 +82,7 @@ func (u *UserHandler) UpdateUserProfile(c *gin.Context) {
 		return
 	}
 
-	user, found, err := u.userRepository.FindByCondition("email = ?", claims.Email)
+	user, found, err := u.deps.UserRepo.FindByCondition("email = ?", claims.Email)
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
@@ -97,7 +95,7 @@ func (u *UserHandler) UpdateUserProfile(c *gin.Context) {
 
 	user.PhoneNumber = input.PhoneNumber
 
-	_, err = u.userRepository.Save(user)
+	_, err = u.deps.UserRepo.Save(user)
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
 		return
@@ -133,7 +131,7 @@ func (u *UserHandler) UserProfile(c *gin.Context) {
 		return
 	}
 
-	user, f, err := u.userRepository.FindByCondition("user_id = ?", authClaims.UserId)
+	user, f, err := u.deps.UserRepo.FindByCondition("user_id = ?", authClaims.UserId)
 
 	if err != nil {
 		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)

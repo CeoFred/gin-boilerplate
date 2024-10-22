@@ -1,52 +1,52 @@
 package database
 
 import (
-	"context"
-	"gorm.io/gorm"
+	"database/sql"
+	"embed"
+	"io/fs"
 	"log"
-	"time"
+
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+	_ "github.com/lib/pq"
 )
 
-const (
-	dbTimeout = 30 * time.Second
-)
+//go:embed migrations/*
+var migrationFiles embed.FS
 
-func RunManualMigration(db *gorm.DB) {
+func RunManualMigration(dbURL string) {
+	// Open a connection to the database
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Failed to connect to database:", err)
+	}
+	defer db.Close()
 
-	query1 := `CREATE TABLE IF NOT EXISTS users (
-			id UUID NOT NULL,
-			email VARCHAR(255) NOT NULL,
-			password VARCHAR(255),
-			first_name VARCHAR(255),
-			last_name VARCHAR(255),
-			avatar_url VARCHAR(255) DEFAULT NULL,
-			ip VARCHAR(255) DEFAULT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			last_login VARCHAR(255) NULL,
-		 role VARCHAR(255) DEFAULT 'user',
-		 email_verified BOOLEAN DEFAULT FALSE,
-		 country VARCHAR(255) DEFAULT NULL,
-		 phone_number VARCHAR(255) DEFAULT NULL,
-		 status VARCHAR(255) DEFAULT 'Inactive'
-			);
-			`
-
-	migrationQueries := []string{
-		query1,
+	// Use the embedded migration files
+	migrations, err := fs.Sub(migrationFiles, "migrations")
+	if err != nil {
+		log.Fatal("Failed to create sub filesystem for migrations:", err)
 	}
 
-	log.Println("running db migration :::::::::::::")
-
-	_, cancel := context.WithTimeout(context.Background(), dbTimeout)
-	defer cancel()
-
-	for _, query := range migrationQueries {
-		err := db.Exec(query).Error
-		if err != nil {
-			log.Fatal(err)
-		}
+	d, err := iofs.New(migrations, ".")
+	if err != nil {
+		log.Fatal("Failed to create iofs driver:", err)
 	}
 
-	log.Println("complete db migration")
+	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	if err != nil {
+		log.Fatal("Failed to create postgres driver:", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "postgres", driver)
+	if err != nil {
+		log.Fatal("Failed to create migrate instance:", err)
+	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatal("Failed to run migrations:", err)
+	}
+
+	log.Println("Completed DB migration")
 }
