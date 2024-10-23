@@ -16,6 +16,10 @@ A production-ready boilerplate for building REST APIs with Go and Gin framework.
 - [x] Environment configuration
 - [x] Hot reload during development
 - [x] Code security scanning with gosec
+- [x] Event streaming with Apache Kafka
+- [x] Transactional message processing
+- [x] Consumer group management
+- [x] Event broadcasting system
 
 ## 📋 Prerequisites
 
@@ -104,6 +108,7 @@ make docs-generate
 ## 📁 Project Structure
 
 ```
+
 .
 ├── constants/           # Application constants and configuration
 ├── database/           # Database connection and migrations
@@ -112,8 +117,12 @@ make docs-generate
 │   ├── bootstrap/     # Application bootstrapping
 │   ├── helpers/       # Helper functions
 │   ├── otp/          # OTP management
-│   ├── repository/          # Repository management
-│   └── routes/        # API routes
+│   ├── repository/    # Repository management
+│   ├── routes/        # API routes
+│   └── streaming/     # Kafka streaming implementation
+│       ├── consumer.go  # Kafka consumer implementation
+│       ├── producer.go  # Kafka producer implementation
+│       └── events.go    # Event type definitions
 ├── static/            # Static files
 ├── templates/         # Template files
 ├── main.go           # Application entry point

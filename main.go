@@ -3,13 +3,17 @@ package main
 import (
 	"context"
 	"log"
+	"os/signal"
+	"syscall"
 
 	"github.com/CeoFred/gin-boilerplate/constants"
 	"github.com/CeoFred/gin-boilerplate/database"
 	"github.com/CeoFred/gin-boilerplate/internal/bootstrap"
+	"github.com/CeoFred/gin-boilerplate/internal/handlers"
 	"github.com/CeoFred/gin-boilerplate/internal/helpers"
 	"github.com/CeoFred/gin-boilerplate/internal/otp"
 	"github.com/CeoFred/gin-boilerplate/internal/routes"
+	"github.com/CeoFred/gin-boilerplate/internal/service/streaming"
 
 	"flag"
 	"fmt"
@@ -126,11 +130,53 @@ func main() {
 	})
 
 	v1 := g.Group("/api/v1")
+
+	keepRunning := true
+
+	provider, err := streaming.NewProducer(&streaming.Config{
+		Verbose:   false,
+		Producers: 3,
+		Topic:     []string{"signup"},
+		Version:   "3.8.0",
+		Brokers:   "127.0.0.1:9092",
+	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	dependencies := bootstrap.InitializeDependencies(database.DB)
+	dependencies.EventProducer = provider
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	consumerClient, err := streaming.NewConsumer(&streaming.Config{
+		Verbose:  true,
+		Version:  "3.8.0",
+		Brokers:  "127.0.0.1:9092",
+		Assignor: "roundrobin",
+		Oldest:   true,
+		Group:    "gin",
+		Ctx:      ctx,
+	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	eventHandler := handlers.EventHandler{
+		Deps: dependencies,
+	}
+
+	if err := consumerClient.Consume("signup", eventHandler.ProcessSignup); err != nil {
+		log.Fatal(err)
+	}
+
 	routes.Routes(v1, dependencies)
 
 	g.NoRoute(func(c *gin.Context) {
-		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("Route not found"), http.StatusNotFound)
+		helpers.ReturnError(c, "Something went wrong", fmt.Errorf("route not found"), http.StatusNotFound)
 	})
 
 	port := os.Getenv("PORT")
@@ -139,4 +185,25 @@ func main() {
 	}
 
 	go log.Fatal(g.Run(":" + port))
+
+	sigterm := make(chan os.Signal, 1)
+	signal.Notify(sigterm, syscall.SIGINT, syscall.SIGTERM)
+
+	sigusr1 := make(chan os.Signal, 1)
+	signal.Notify(sigusr1, syscall.SIGUSR1)
+
+	for keepRunning {
+		select {
+		case <-ctx.Done():
+			log.Println("terminating: context cancelled")
+			keepRunning = false
+		case <-sigterm:
+			log.Println("terminating: via signal")
+			keepRunning = false
+		case <-sigusr1:
+			consumerClient.ToggleConsumptionFlow()
+		}
+	}
+	provider.Clear()
+	cancel()
 }

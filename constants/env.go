@@ -33,6 +33,10 @@ type Config struct {
 	SendFromEmail          string
 	SendFromName           string
 	SSLMode                string
+	KafkaBrokers           string
+	KafkaVersion           string
+	KafkaClientID          string
+	KafkaConsumerGroup     string
 }
 
 func init() {
@@ -71,6 +75,10 @@ func New() *Config {
 		SendFromEmail:          getEnv("SEND_FROM_EMAIL", ""),
 		SendFromName:           getEnv("SEND_FROM_NAME", ""),
 		SSLMode:                getEnv("SSL_MODE", "disable"),
+		KafkaBrokers:           getEnv("KAFKA_BROKERS", ""),
+		KafkaVersion:           getEnv("KAFKA_VERSION", ""),
+		KafkaClientID:          getEnv("KAFKA_CLIENT_ID", ""),
+		KafkaConsumerGroup:     getEnv("KAFKA_CONSUMER_GROUP", ""),
 	}
 }
 

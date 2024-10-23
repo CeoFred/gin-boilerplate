@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -267,6 +268,14 @@ func (a *AuthHandler) Register(c *gin.Context) {
 	baseURL := helpers.GetBaseURL(c)
 
 	go a.deps.EmailService.SendVerificationEmail(user.FirstName, user.Email, baseURL)
+
+	eventJSON, err := json.Marshal(user)
+	if err != nil {
+		helpers.ReturnError(c, "Something went wrong", err, http.StatusInternalServerError)
+		return
+	}
+
+	go a.deps.EventProducer.BroadCast(1, "signup", eventJSON)
 
 	helpers.ReturnJSON(c, "Account created successfully", user, http.StatusCreated)
 
